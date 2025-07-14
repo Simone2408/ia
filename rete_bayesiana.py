@@ -203,16 +203,3 @@ class ReteBayesiana:
             print() # Aggiunge una riga vuota per separare i nodi
 
     
-# Codice per testare la classe
-if __name__ == "__main__":
-    mia_rete = ReteBayesiana()
-    mia_rete.carica_da_file_bif("asia.bif")
-    
-    # Test della funzione di stampa
-    mia_rete.stampa_rete()
-    
-    # Test della generazione di campioni
-    print("\n--- Genero 3 Campioni di Esempio ---")
-    tre_campioni = mia_rete.genera_campioni(1000)
-    for i, campione in enumerate(tre_campioni):
-        print(f"Campione {i+1}: {campione}")
