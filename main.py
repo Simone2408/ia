@@ -1,52 +1,9 @@
 import matplotlib.pyplot as plt
 from rete_bayesiana import ReteBayesiana
-from algoritm import impara_parametri, js_divergence
+from algoritm import impara_parametri,calcola_divergenza_media
 
-def calcola_divergenza_media(rete_vera, rete_appresa):
-    """
-    Calcola l'errore medio (Divergenza JS) tra due reti.
-    Confronta ogni CPT della rete vera con quella appresa.
-    """
-    divergenze_locali = []
-    for nome_nodo in rete_vera.nodi:
-        nodo_vero = rete_vera.nodi[nome_nodo]
-        nodo_appreso = rete_appresa.nodi[nome_nodo]
-        
-        # --- CORREZIONE: Gestiamo i due tipi di CPT separatamente ---
-        if not nodo_vero.genitori:
-            # CASO A: Nodo senza genitori
-            dist_vera = nodo_vero.cpt
-            dist_appresa = nodo_appreso.cpt.get("no_parents", {}) # La nostra chiave fissa
-            
-            if not dist_appresa: continue # Salta se per qualche motivo la CPT appresa è vuota
 
-            stati = nodo_vero.stati
-            p_probs = [dist_vera.get(stato, 0) for stato in stati]
-            q_probs = [dist_appresa.get(stato, 0) for stato in stati]
-            
-            divergenza = js_divergence(p_probs, q_probs)
-            divergenze_locali.append(divergenza)
-        else:
-            # CASO B: Nodo con genitori
-            # Itera su ogni condizione (riga) della CPT
-            for condizione, dist_vera in nodo_vero.cpt.items():
-                dist_appresa = nodo_appreso.cpt[condizione]
-                
-                # Estrai le liste di probabilità da confrontare
-                stati = nodo_vero.stati
-                p_probs = [dist_vera[stato] for stato in stati]
-                q_probs = [dist_appresa[stato] for stato in stati]
-                
-                # Calcola la divergenza per questa singola distribuzione
-                divergenza = js_divergence(p_probs, q_probs)
-                divergenze_locali.append(divergenza)
-    
-    # Restituisce la media di tutte le divergenze calcolate
-    if not divergenze_locali:
-        return 0
-    return sum(divergenze_locali) / len(divergenze_locali)
-
-def esegui_esperimento_curva_apprendimento():
+def main():
     """
     Funzione principale che esegue l'intero esperimento per
     generare la curva di apprendimento.
@@ -55,12 +12,12 @@ def esegui_esperimento_curva_apprendimento():
 
     # --- 1. SETUP ---
     # Definiamo le dimensioni dei dataset da testare
-    dimensioni_campione = [50, 100, 250, 500, 1000, 2500, 5000, 10000]
+    dimensioni_campione = [50, 100, 250, 500, 1000, 2500,5000,10000,10000000]  # massimo 10 000 con andes.bif
     risultati_divergenza = [] # Qui salveremo gli errori per ogni dimensione
 
     # Carichiamo la rete originale che rappresenta la "verita'"
     p_vera = ReteBayesiana()
-    p_vera.carica_da_file_bif("andes.bif")
+    p_vera.carica_da_file_bif("data/asia.bif")
     print("Rete 'vera' (p) caricata con successo.")
 
     # --- 2. CICLO DI SIMULAZIONE ---
@@ -115,8 +72,8 @@ def esegui_esperimento_curva_apprendimento():
     
     # Salva il grafico in un file
     plt.tight_layout() # Ottimizza lo spazio
-    plt.savefig("curva_apprendimento_migliorata.png", dpi=300) # Salva in alta risoluzione
-    print("Grafico 'curva_apprendimento_migliorata.png' salvato con successo.")
+    plt.savefig("curva_apprendimento.png", dpi=300) # Salva in alta risoluzione
+    print("Grafico 'curva_apprendimento.png' salvato con successo.")
     
     # Mostra il grafico a schermo
     plt.show()
@@ -124,4 +81,4 @@ def esegui_esperimento_curva_apprendimento():
 
 # Questo blocco viene eseguito solo quando lanci "python main.py"
 if __name__ == "__main__":
-    esegui_esperimento_curva_apprendimento()
+    main()

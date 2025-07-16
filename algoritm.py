@@ -92,3 +92,47 @@ def js_divergence(p: list, q: list) -> float:
     q = np.asarray(q)
     m = 0.5 * (p + q)
     return 0.5 * (kl_divergence(p, m) + kl_divergence(q, m))
+
+def calcola_divergenza_media(rete_vera, rete_appresa):
+    """
+    Calcola l'errore medio (Divergenza JS) tra due reti.
+    Confronta ogni CPT della rete vera con quella appresa.
+    """
+    divergenze_locali = []
+    for nome_nodo in rete_vera.nodi:
+        nodo_vero = rete_vera.nodi[nome_nodo]
+        nodo_appreso = rete_appresa.nodi[nome_nodo]
+        
+        # --- CORREZIONE: Gestiamo i due tipi di CPT separatamente ---
+        if not nodo_vero.genitori:
+            # CASO A: Nodo senza genitori
+            dist_vera = nodo_vero.cpt
+            dist_appresa = nodo_appreso.cpt.get("no_parents", {}) # La nostra chiave fissa
+            
+            if not dist_appresa: continue # Salta se per qualche motivo la CPT appresa è vuota
+
+            stati = nodo_vero.stati
+            p_probs = [dist_vera.get(stato, 0) for stato in stati]
+            q_probs = [dist_appresa.get(stato, 0) for stato in stati]
+            
+            divergenza = js_divergence(p_probs, q_probs)
+            divergenze_locali.append(divergenza)
+        else:
+            # CASO B: Nodo con genitori
+            # Itera su ogni condizione (riga) della CPT
+            for condizione, dist_vera in nodo_vero.cpt.items():
+                dist_appresa = nodo_appreso.cpt[condizione]
+                
+                # Estrai le liste di probabilità da confrontare
+                stati = nodo_vero.stati
+                p_probs = [dist_vera[stato] for stato in stati]
+                q_probs = [dist_appresa[stato] for stato in stati]
+                
+                # Calcola la divergenza per questa singola distribuzione
+                divergenza = js_divergence(p_probs, q_probs)
+                divergenze_locali.append(divergenza)
+    
+    # Restituisce la media di tutte le divergenze calcolate
+    if not divergenze_locali:
+        return 0
+    return sum(divergenze_locali) / len(divergenze_locali)
