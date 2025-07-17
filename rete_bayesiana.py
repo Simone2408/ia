@@ -2,33 +2,29 @@ import random
 import re
 
 class Nodo:
-    """
-    Rappresenta un singolo nodo nel grafo della Rete Bayesiana.
-    """
+    """Nodo di una rete Bayesiana con genitori, stati e CPT."""
+    
     def __init__(self, nome, genitori, cpt):
         self.nome = nome
-        self.genitori = genitori  # Lista di stringhe con i nomi dei genitori
-        self.cpt = cpt           # Una tabella (es. dizionario) di probabilità
-        self.stati = []          # Lista degli stati possibili del nodo
+        self.genitori = genitori  # Lista nomi genitori
+        self.cpt = cpt           # Tabella probabilità condizionata
+        self.stati = []          # Stati possibili del nodo
 
     def __str__(self):
         return f"Nodo({self.nome})"
 
 class ReteBayesiana:
-    """
-    Rappresenta l'intera Rete Bayesiana, come un insieme di nodi.
-    """
+    """Rete Bayesiana con nodi, caricamento da file BIF e campionamento."""
+    
     def __init__(self):
-        self.nodi = {}  # Un dizionario che mappa i nomi dei nodi ai loro oggetti Nodo
+        self.nodi = {}  # nome_nodo -> oggetto Nodo
 
     def aggiungi_nodo(self, nodo):
-        """Aggiunge un oggetto Nodo alla rete."""
+        """Aggiunge un nodo alla rete."""
         self.nodi[nodo.nome] = nodo
 
     def carica_da_file_bif(self, filepath):
-        """
-        Legge un file .bif e popola la rete con Nodi, Genitori e CPT.
-        """
+        """Carica rete da file BIF standard."""
         try:
             with open(filepath, 'r') as f:
                 contenuto = f.read()
@@ -36,170 +32,136 @@ class ReteBayesiana:
             print(f"Errore: File non trovato a {filepath}")
             return
 
-        # Trova tutte le variabili
-        variabili = re.findall(r'variable\s+(\w+)\s*\{[^}]*\{([^}]+)\}', contenuto)
+        # Estrai variabili e i loro stati
+        pattern_variabili = r'variable\s+(\w+)\s*\{[^}]*\{([^}]+)\}'
+        variabili = re.findall(pattern_variabili, contenuto)
         
         for nome, stati_str in variabili:
             stati = [s.strip() for s in stati_str.split(',')]
-            nuovo_nodo = Nodo(nome=nome, genitori=[], cpt={})
-            nuovo_nodo.stati = stati
-            self.aggiungi_nodo(nuovo_nodo)
+            nodo = Nodo(nome=nome, genitori=[], cpt={})
+            nodo.stati = stati
+            self.aggiungi_nodo(nodo)
 
-        # Trova tutte le probabilità
-        probabilita_blocks = re.findall(r'probability\s*\(\s*([^)]+)\s*\)\s*\{([^}]+)\}', contenuto)
+        # Estrai probabilità
+        pattern_prob = r'probability\s*\(\s*([^)]+)\s*\)\s*\{([^}]+)\}'
+        prob_blocks = re.findall(pattern_prob, contenuto)
         
-        for prob_def, prob_content in probabilita_blocks:
-            # Analizza la definizione della probabilità
+        for prob_def, prob_content in prob_blocks:
+            # Parsing della definizione P(figlio|genitori)
             if '|' in prob_def:
-                parts = prob_def.split('|')
-                nome_figlio = parts[0].strip()
-                genitori = [g.strip() for g in parts[1].split(',')]
+                figlio, genitori_str = prob_def.split('|')
+                nome_figlio = figlio.strip()
+                genitori = [g.strip() for g in genitori_str.split(',')]
             else:
                 nome_figlio = prob_def.strip()
                 genitori = []
             
-            # Aggiorna i genitori del nodo
             self.nodi[nome_figlio].genitori = genitori
             
-            # Analizza il contenuto delle probabilità
+            # Parsing del contenuto delle probabilità
             if 'table' in prob_content:
-                # Nodo senza genitori
+                # Nodo radice: P(X) = [p1, p2, ...]
                 table_match = re.search(r'table\s+([^;]+)', prob_content)
                 if table_match:
-                    probs_str = table_match.group(1).replace(',', '').split()
-                    probs = [float(p) for p in probs_str]
-                    self.nodi[nome_figlio].cpt = dict(zip(self.nodi[nome_figlio].stati, probs))
+                    prob_values = [float(p) for p in table_match.group(1).replace(',', '').split()]
+                    self.nodi[nome_figlio].cpt = dict(zip(self.nodi[nome_figlio].stati, prob_values))
             else:
-                # Nodo con genitori
+                # Nodo con genitori: P(X|Y=y) = [p1, p2, ...]
                 righe = re.findall(r'\(([^)]+)\)\s+([^;]+)', prob_content)
-                for condizione, probs_str in righe:
-                    key_tuple = tuple(condizione.replace(',', '').split())
-                    probs = [float(p) for p in probs_str.replace(',', '').split()]
-                    self.nodi[nome_figlio].cpt[key_tuple] = dict(zip(self.nodi[nome_figlio].stati, probs))
+                for condizione, prob_str in righe:
+                    condizione_tuple = tuple(condizione.replace(',', '').split())
+                    prob_values = [float(p) for p in prob_str.replace(',', '').split()]
+                    self.nodi[nome_figlio].cpt[condizione_tuple] = dict(zip(self.nodi[nome_figlio].stati, prob_values))
 
-        print(f"Rete '{filepath}' caricata con successo. Trovati {len(self.nodi)} nodi.")
-
-   # Dentro la classe ReteBayesiana
+        print(f"Rete caricata: {len(self.nodi)} nodi da '{filepath}'")
 
     def _ordine_topologico(self):
-        """
-        Implementazione dell'algoritmo di Kahn per l'ordinamento topologico.
-        """
-        # Copia dei gradi d'ingresso (numero di genitori) per ogni nodo
+        """Algoritmo di Kahn per ordinamento topologico."""
+        # Conta genitori per ogni nodo
         gradi_ingresso = {nome: len(nodo.genitori) for nome, nodo in self.nodi.items()}
         
-        # Coda dei nodi con zero genitori
+        # Inizia con nodi senza genitori
         coda = [nome for nome, grado in gradi_ingresso.items() if grado == 0]
-        
-        lista_ordinata = []
+        ordinamento = []
         
         while coda:
-            nome_nodo = coda.pop(0)
-            lista_ordinata.append(nome_nodo)
+            nodo_corrente = coda.pop(0)
+            ordinamento.append(nodo_corrente)
             
-            # Per ogni "vicino" del nodo corrente...
-            for altro_nome, altro_nodo in self.nodi.items():
-                if nome_nodo in altro_nodo.genitori:
-                    # ...riduci il suo grado d'ingresso di 1
-                    gradi_ingresso[altro_nome] -= 1
-                    # Se il suo grado diventa 0, aggiungilo alla coda
-                    if gradi_ingresso[altro_nome] == 0:
-                        coda.append(altro_nome)
-                        
-        if len(lista_ordinata) == len(self.nodi):
-            return lista_ordinata
-        else:
-            # Questo succede se c'e' un ciclo nel grafo, ma non nel nostro caso
-            raise Exception("Errore: il grafo contiene un ciclo.")
+            # Rimuovi archi uscenti e aggiorna gradi
+            for nome, nodo in self.nodi.items():
+                if nodo_corrente in nodo.genitori:
+                    gradi_ingresso[nome] -= 1
+                    if gradi_ingresso[nome] == 0:
+                        coda.append(nome)
         
+        if len(ordinamento) != len(self.nodi):
+            raise ValueError("Ciclo rilevato nel grafo")
         
+        return ordinamento
 
     def genera_campione(self):
-
-    #Genera un singolo campione dalla rete usando il campionamento ancestrale.
-
+        """Genera un campione con campionamento ancestrale."""
         campione = {}
-        nodi_ordinati = self._ordine_topologico()
-
-        # Itera sui nomi dei nodi nell'ordine corretto (genitori prima dei figli)
-        for nome_nodo in nodi_ordinati:
+        
+        # Processa nodi in ordine topologico
+        for nome_nodo in self._ordine_topologico():
             nodo = self.nodi[nome_nodo]
             
-            # 1. Trova la distribuzione di probabilita' corretta dalla CPT
+            # Trova distribuzione appropriata
             if not nodo.genitori:
-                # Caso A: Nodo senza genitori
+                # Nodo radice
                 distribuzione = nodo.cpt
             else:
-                # Caso B: Nodo con genitori
-                # Prendi i valori dei genitori dal campione che stiamo costruendo
-                valori_genitori = tuple(campione[nome_genitore] for nome_genitore in nodo.genitori)
+                # Nodo con genitori: usa valori dei genitori dal campione corrente
+                valori_genitori = tuple(campione[genitore] for genitore in nodo.genitori)
                 distribuzione = nodo.cpt[valori_genitori]
-
-            # 2. Estrai gli stati e le probabilità da quella distribuzione
+            
+            # Campiona dal nodo
             stati = list(distribuzione.keys())
             probabilita = list(distribuzione.values())
-            
-            # 3. Fai una scelta pesata casuale e salvala nel campione
-            valore_scelto = random.choices(stati, weights=probabilita, k=1)[0]
-            campione[nome_nodo] = valore_scelto
-                
+            campione[nome_nodo] = random.choices(stati, weights=probabilita, k=1)[0]
+        
         return campione
 
     def genera_campioni(self, n):
-        """
-        Genera n campioni dalla rete.
-        """
-        lista = []
-
-        for _ in range (n):
-            campione_generato = self.genera_campione()
-            lista.append(campione_generato)
-    
-        return lista
-
-    # Dentro la classe ReteBayesiana
+        """Genera n campioni dalla rete."""
+        return [self.genera_campione() for _ in range(n)]
 
     def stampa_rete(self):
-        """
-        Stampa informazioni dettagliate e formattate sulla rete per debug.
-        """
-        print("=" * 40)
-        print("  DEFINIZIONE DELLA RETE BAYESIANA")
-        print("=" * 40)
-        print(f"La rete contiene {len(self.nodi)} nodi.\n")
+        """Stampa struttura della rete per debug."""
+        print("=" * 50)
+        print("  STRUTTURA RETE BAYESIANA")
+        print("=" * 50)
+        print(f"Nodi: {len(self.nodi)}\n")
 
-        # Usiamo l'ordine topologico per una stampa piu' logica
         try:
             nodi_ordinati = self._ordine_topologico()
-        except Exception as e:
-            print(f"Errore nell'ordinamento topologico: {e}. Stampo in ordine casuale.")
+        except ValueError as e:
+            print(f"Errore ordinamento: {e}")
             nodi_ordinati = list(self.nodi.keys())
 
         for nome_nodo in nodi_ordinati:
             nodo = self.nodi[nome_nodo]
-            print(f"--- NODO: {nodo.nome} ---")
+            print(f"--- {nodo.nome} ---")
             
-            # Stampa i genitori in modo pulito
+            # Genitori
             if nodo.genitori:
                 print(f"  Genitori: {', '.join(nodo.genitori)}")
             else:
-                print("  Genitori: Nessuno (Nodo Radice)")
-
-            # Stampa la Tabella di Probabilita' Condizionata (CPT)
+                print("  Genitori: Nessuno")
+            
+            # CPT
             print("  CPT:")
             if not nodo.genitori:
-                # Caso A: Nodo senza genitori
+                # Nodo radice
                 for stato, prob in nodo.cpt.items():
                     print(f"    P({nodo.nome}={stato}) = {prob:.4f}")
             else:
-                # Caso B: Nodo con genitori
+                # Nodo con genitori
                 for condizione, distribuzione in nodo.cpt.items():
-                    # Formatta la condizione per renderla leggibile (es. "smoke=yes, tub=no")
-                    cond_str = ", ".join([f"{gen}={val}" for gen, val in zip(nodo.genitori, condizione)])
-                    print(f"    Se ({cond_str}):")
+                    cond_str = ", ".join(f"{gen}={val}" for gen, val in zip(nodo.genitori, condizione))
+                    print(f"    P({nodo.nome}|{cond_str}):")
                     for stato, prob in distribuzione.items():
-                        print(f"      -> P({nodo.nome}={stato}) = {prob:.4f}")
-            
-            print() # Aggiunge una riga vuota per separare i nodi
-
-    
+                        print(f"      {stato}: {prob:.4f}")
+            print()

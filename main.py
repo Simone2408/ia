@@ -1,80 +1,101 @@
 import matplotlib.pyplot as plt
+from matplotlib.ticker import ScalarFormatter
 from rete_bayesiana import ReteBayesiana
-from algoritm import impara_parametri,calcola_divergenza_media
-
+from algoritm import impara_parametri, calcola_divergenza_media
 
 def main():
-    """
-    Funzione principale che esegue l'intero esperimento per
-    generare la curva di apprendimento.
-    """
-    print("--- Inizio Esperimento Curva di Apprendimento ---")
+    """Esperimento completo: curva di apprendimento Bayesiano con divergenza JS."""
+    print("=== ESPERIMENTO CURVA DI APPRENDIMENTO ===")
 
-    # --- SETUP ---
-    # Definiamo le dimensioni dei dataset da testare
-    dimensioni_campione = [50, 100, 250, 500, 1000, 2500, 5000, 10000]  # massimo 10 000 con andes.bif
-    risultati_divergenza = [] # Qui salveremo gli errori per ogni dimensione
+    # Configurazione esperimento
+    dimensioni_dataset = [50, 100, 250, 500, 1000, 2500, 5000, 10000]
+    errori_js = []
 
-    # Carichiamo la rete originale che rappresenta la "verita'"
-    p_vera = ReteBayesiana()
-    p_vera.carica_da_file_bif("data/asia.bif")
-    print("Rete 'vera' (p) caricata con successo.")
-    
+    # Carica rete di riferimento
+    rete_vera = ReteBayesiana()
+    rete_vera.carica_da_file_bif("data/asia.bif")
+    print(f"Rete di riferimento caricata\n")
 
-    # --- CICLO DI SIMULAZIONE ---
-    # Eseguiamo l'esperimento per ogni dimensione del campione
-    for n in dimensioni_campione:
-        print(f"\nInizio test con n = {n} campioni...")
-
-        # a. Genera i dati di addestramento
-        dati_training = p_vera.genera_campioni(n)
-
+    # Esperimento per ogni dimensione
+    for n in dimensioni_dataset:
+        print(f"Test con {n} campioni...")
         
-        # b. Apprendi una nuova rete 'q' dai dati
-        q_appresa = impara_parametri(p_vera, dati_training)
+        # Genera dataset sintetico
+        dati_train = rete_vera.genera_campioni(n)
         
-        # c. Calcola l'errore medio tra la rete vera e quella appresa
-        errore = calcola_divergenza_media(p_vera, q_appresa)
-        risultati_divergenza.append(errore)
+        # Apprendi parametri
+        rete_appresa = impara_parametri(rete_vera, dati_train)
         
-        print(f"Test completato per n={n}. Errore (JS Divergence Media): {errore:.6f}")
+        # Calcola errore
+        errore = calcola_divergenza_media(rete_vera, rete_appresa)
+        errori_js.append(errore)
+        
+        print(f"  Errore JS: {errore:.6f}")
 
-    # ---  VISUALIZZAZIONE DEL RISULTATO  ---
-    print("\n--- Generazione del grafico della curva di apprendimento... ---")
-    
-    # Usiamo uno stile piu' professionale per il grafico
-    plt.style.use('seaborn-v0_8-whitegrid')
+    # Visualizzazione risultati
+    print("\n=== GENERAZIONE GRAFICO ===")
+
+    # ---  Configurazione dello Stile ---
+    plt.rcParams.update({
+        'font.family': 'sans-serif',
+        'font.sans-serif': 'Arial', 
+        'axes.titlesize': 20,
+        'axes.labelsize': 14,
+        'xtick.labelsize': 12,
+        'ytick.labelsize': 12,
+        'legend.fontsize': 12,
+        'axes.spines.top': False,   # Rimuove il bordo superiore del grafico
+        'axes.spines.right': False, # Rimuove il bordo destro del grafico
+        'axes.titleweight': 'bold',
+        'axes.labelpad': 15,
+        'figure.facecolor': 'white',
+        'axes.facecolor': 'white',
+    })
+
+    # ---  Creazione della figura e degli assi ---
     fig, ax = plt.subplots(figsize=(12, 7))
 
-    # Disegna la linea principale
-    ax.plot(dimensioni_campione, risultati_divergenza, marker='o', markersize=8, linestyle='-', color='royalblue', label='Errore Medio (JS Divergence)')
-    
-    # Aggiunge un'area sfumata sotto la linea per un effetto visivo migliore
-    ax.fill_between(dimensioni_campione, risultati_divergenza, alpha=0.1, color='royalblue')
+    # ---  Disegno della curva principale ---
+    ax.plot(dimensioni_dataset, errori_js,
+            'o-',                                # Stile linea e marcatore
+            linewidth=2.5,                       # Spessore della linea
+            markersize=8,                        # Dimensione dei marcatori
+            color='#005A9C',                     # Colore blu per la linea
+            markerfacecolor='#6495ED',            # Colore di riempimento dei marcatori
+            markeredgecolor='#005A9C',            # Colore del bordo dei marcatori
+            label='Errore JS Medio')
 
-    # Aggiunge etichette con il valore esatto per ogni punto
-    for i, txt in enumerate(risultati_divergenza):
-        ax.annotate(f'{txt:.4f}', (dimensioni_campione[i], risultati_divergenza[i]), textcoords="offset points", xytext=(0,10), ha='center')
+    # ---  Annotazioni dei valori ---
+    for x, y in zip(dimensioni_dataset, errori_js):
+        ax.annotate(f'{y:.4f}',
+                    (x, y),
+                    textcoords="offset points",
+                    xytext=(0, 15),
+                    ha='center',
+                    fontsize=10,
+                    fontweight='bold',
+                    bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="none", alpha=0.75))
 
-    # Impostazioni del grafico
-    ax.set_title("Curva di Apprendimento del Modello Bayesiano", fontsize=16, fontweight='bold')
-    ax.set_xlabel("Numero di Campioni (n)", fontsize=12)
-    ax.set_ylabel("Errore Medio (Divergenza JS)", fontsize=12)
-    ax.set_xscale('log') # La scala logaritmica e' fondamentale
-    
-    # Migliora la griglia
-    ax.grid(True, which="both", linestyle='--', linewidth=0.5)
-    
-    # Aggiunge una legenda
-    ax.legend()
+    # ---  Configurazione di titoli, etichette e assi ---
+    ax.set_title('Curva di Apprendimento della Rete Bayesiana', pad=20)
+    ax.set_xlabel('Dimensione del Dataset')
+    ax.set_ylabel('Divergenza Jensen-Shannon (JS)')
+    ax.set_xscale('log')
 
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    
-    # Salva il grafico in un file
-    plt.tight_layout() # Ottimizza lo spazio
-    plt.savefig("curva_apprendimento.png", dpi=300) # Salva in alta risoluzione
-    print("Grafico 'curva_apprendimento.png' salvato con successo.")
+    # --- Creazione della griglia ---
+    ax.grid(True, which='major', axis='both', linestyle='--', linewidth=0.5, color='lightgray', zorder=0)
+    ax.grid(True, which='minor', axis='x', linestyle=':', linewidth=0.4, color='lightgray', zorder=0)
+
+ 
+    ax.legend(loc='upper right', frameon=True, shadow=True, facecolor='white', framealpha=0.9)
+
+    # Forza la visualizzazione dei numeri interi sull'asse X 
+    ax.xaxis.set_major_formatter(ScalarFormatter())
+    ax.tick_params(axis='x', which='minor', bottom=False) 
+    fig.tight_layout(pad=1.5)
+    plt.savefig("curva_apprendimento.png", dpi=300, bbox_inches='tight')
+
+    print("Grafico salvato con successo: curva_apprendimento.png")
 
     plt.show()
 

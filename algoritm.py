@@ -1,138 +1,113 @@
-# algoritmi.py
 import numpy as np
 from copy import deepcopy
 from itertools import product
+from rete_bayesiana import ReteBayesiana
 
-from rete_bayesiana import ReteBayesiana # Assicurati che rete_bayesiana.py sia nella stessa cartella
-
-def impara_parametri(struttura_rete, dati):
+def impara_parametri(rete_originale, dati):
     """
-    Versione robusta che inizializza tutti i possibili conteggi a 1
-    per gestire anche le condizioni non osservate nei dati.
+    Apprende CPT da dati usando smoothing di Laplace.
+    
+    Args:
+        rete_originale: Rete con struttura nota (solo genitori/stati)
+        dati: Lista di campioni (dizionari)
+    
+    Returns:
+        Nuova rete con CPT apprese
     """
-    rete_appresa = deepcopy(struttura_rete)
+    rete_appresa = deepcopy(rete_originale)
     
     for nome_nodo, nodo in rete_appresa.nodi.items():
+        # Inizializza conteggi con Laplace smoothing (tutti a 1)
         conteggi = {}
         
-        # Inizializza i conteggi per tutte le possibili combinazioni dei genitori
         if not nodo.genitori:
-            # Nodo senza genitori - usa "no_parents" come chiave
-            conteggi["no_parents"] = {}
-            for stato in nodo.stati:
-                conteggi["no_parents"][stato] = 1
+            # Nodo radice: una sola distribuzione
+            conteggi["root"] = {stato: 1 for stato in nodo.stati}
         else:
-            # Nodo con genitori - genera tutte le combinazioni possibili
-            stati_genitori = []
-            for g in nodo.genitori:
-                stati_genitori.append(rete_appresa.nodi[g].stati)
+            # Nodo con genitori: una distribuzione per ogni combinazione
+            stati_genitori = [rete_appresa.nodi[g].stati for g in nodo.genitori]
             
-            # Genera tutte le combinazioni possibili dei valori dei genitori
-            for combinazione_genitori in product(*stati_genitori):
-                # Usa sempre la tupla come chiave (come nel file BIF originale)
-                conteggi[combinazione_genitori] = {}
-                for stato in nodo.stati:
-                    conteggi[combinazione_genitori][stato] = 1
+            for comb_genitori in product(*stati_genitori):
+                conteggi[comb_genitori] = {stato: 1 for stato in nodo.stati}
         
-        # Ciclo sui dati per aggiornare i conteggi
+        # Conta occorrenze nei dati
         for campione in dati:
-            risultato = campione[nome_nodo]
+            valore_nodo = campione[nome_nodo]
             
             if not nodo.genitori:
-                condizione = "no_parents"
+                chiave = "root"
             else:
-                # Costruisci la tupla dei valori dei genitori per questo campione
-                valori_genitori = []
-                for g_nome in nodo.genitori:
-                    valori_genitori.append(campione[g_nome])
-                condizione = tuple(valori_genitori)
+                chiave = tuple(campione[g] for g in nodo.genitori)
             
-            conteggi[condizione][risultato] += 1
+            conteggi[chiave][valore_nodo] += 1
         
-        # Trasforma i conteggi in probabilità
-        cpt_appresa = {}
-        for condizione, conteggi_locali in conteggi.items():
-            totale_conteggi = sum(conteggi_locali.values())
-            if condizione == "no_parents":
-                # Per nodi senza genitori, salva direttamente nel formato originale
-                for stato, conteggio in conteggi_locali.items():
-                    cpt_appresa[stato] = conteggio / totale_conteggi
+        # Converti conteggi in probabilità
+        cpt_nuova = {}
+        for chiave, conteggi_locali in conteggi.items():
+            totale = sum(conteggi_locali.values())
+            
+            if chiave == "root":
+                # Nodo radice: salva direttamente
+                cpt_nuova = {stato: count/totale for stato, count in conteggi_locali.items()}
             else:
-                # Per nodi con genitori, mantieni la struttura a dizionario annidato
-                distribuzione_prob = {}
-                for stato, conteggio in conteggi_locali.items():
-                    distribuzione_prob[stato] = conteggio / totale_conteggi
-                cpt_appresa[condizione] = distribuzione_prob
+                # Nodo con genitori: mantieni struttura annidata
+                cpt_nuova[chiave] = {stato: count/totale for stato, count in conteggi_locali.items()}
         
-        nodo.cpt = cpt_appresa
+        nodo.cpt = cpt_nuova
     
-    print("Apprendimento dei parametri completato.")
     return rete_appresa
 
-def kl_divergence(p: list, q: list) -> float:
+def kl_divergence(p, q):
     """
-    Calcola la Divergenza di Kullback-Leibler con gestione robusta degli zeri.
+    Calcola divergenza KL tra due distribuzioni.
+    Gestisce zeri con epsilon per stabilità numerica.
     """
-    p = np.asarray(p)
-    q = np.asarray(q)
+    p, q = np.asarray(p), np.asarray(q)
     
-    # Aggiungi un piccolo valore epsilon per evitare log(0) e divisioni per zero
+    # Evita log(0) e divisioni per 0
     epsilon = 1e-10
     p = np.where(p == 0, epsilon, p)
     q = np.where(q == 0, epsilon, q)
     
-    # Calcola KL divergence
     return np.sum(p * np.log(p / q))
 
-def js_divergence(p: list, q: list) -> float:
-    """
-    Calcola la Divergenza di Jensen-Shannon.
-    """
-    p = np.asarray(p)
-    q = np.asarray(q)
+def js_divergence(p, q):
+    """Calcola divergenza Jensen-Shannon tra due distribuzioni."""
+    p, q = np.asarray(p), np.asarray(q)
     m = 0.5 * (p + q)
     return 0.5 * (kl_divergence(p, m) + kl_divergence(q, m))
 
 def calcola_divergenza_media(rete_vera, rete_appresa):
     """
-    Calcola l'errore medio (Divergenza JS) tra due reti.
-    Confronta ogni CPT della rete vera con quella appresa.
+    Calcola errore medio (JS divergence) tra due reti.
+    Confronta ogni distribuzione condizionata.
     """
-    divergenze_locali = []
+    divergenze = []
+    
     for nome_nodo in rete_vera.nodi:
         nodo_vero = rete_vera.nodi[nome_nodo]
         nodo_appreso = rete_appresa.nodi[nome_nodo]
         
-        # --- CORREZIONE: Gestiamo i due tipi di CPT separatamente ---
         if not nodo_vero.genitori:
-            # CASO A: Nodo senza genitori
+            # Nodo radice: una sola distribuzione
             dist_vera = nodo_vero.cpt
-            dist_appresa = nodo_appreso.cpt.get("no_parents", {}) # La nostra chiave fissa
+            dist_appresa = nodo_appreso.cpt
             
-            if not dist_appresa: continue # Salta se per qualche motivo la CPT appresa è vuota
-
-            stati = nodo_vero.stati
-            p_probs = [dist_vera.get(stato, 0) for stato in stati]
-            q_probs = [dist_appresa.get(stato, 0) for stato in stati]
+            # Estrai probabilità nell'ordine degli stati
+            p_probs = [dist_vera[stato] for stato in nodo_vero.stati]
+            q_probs = [dist_appresa[stato] for stato in nodo_vero.stati]
             
-            divergenza = js_divergence(p_probs, q_probs)
-            divergenze_locali.append(divergenza)
+            divergenze.append(js_divergence(p_probs, q_probs))
         else:
-            # CASO B: Nodo con genitori
-            # Itera su ogni condizione (riga) della CPT
-            for condizione, dist_vera in nodo_vero.cpt.items():
+            # Nodo con genitori: confronta ogni distribuzione condizionata
+            for condizione in nodo_vero.cpt:
+                dist_vera = nodo_vero.cpt[condizione]
                 dist_appresa = nodo_appreso.cpt[condizione]
                 
-                # Estrai le liste di probabilità da confrontare
-                stati = nodo_vero.stati
-                p_probs = [dist_vera[stato] for stato in stati]
-                q_probs = [dist_appresa[stato] for stato in stati]
+                # Estrai probabilità nell'ordine degli stati
+                p_probs = [dist_vera[stato] for stato in nodo_vero.stati]
+                q_probs = [dist_appresa[stato] for stato in nodo_vero.stati]
                 
-                # Calcola la divergenza per questa singola distribuzione
-                divergenza = js_divergence(p_probs, q_probs)
-                divergenze_locali.append(divergenza)
+                divergenze.append(js_divergence(p_probs, q_probs))
     
-    # Restituisce la media di tutte le divergenze calcolate
-    if not divergenze_locali:
-        return 0
-    return sum(divergenze_locali) / len(divergenze_locali)
+    return np.mean(divergenze) if divergenze else 0.0
