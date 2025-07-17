@@ -1,40 +1,42 @@
-# Progetto di Apprendimento dei Parametri per Reti Bayesiane
+# 📊 Apprendimento Bayesiano dei Parametri in Reti Bayesiane
 
-**Studente:** Simone Suma
+**Studente:** Simone Suma  
 **Matricola:** 7125399
 
 ---
 
-## 1. Descrizione del Progetto
+## 🎯 Obiettivo
 
-Questo progetto implementa un algoritmo di **apprendimento Bayesiano dei parametri** per una Rete Bayesiana a struttura nota. L'obiettivo è dimostrare sperimentalmente la convergenza del modello appreso al modello reale all'aumentare della dimensione del dataset di training.
+Questo progetto implementa un sistema di **apprendimento Bayesiano dei parametri** in una rete a struttura nota. L’obiettivo è verificare sperimentalmente la **convergenza delle probabilità stimate** al modello reale all’aumentare della dimensione del dataset.
 
-L'esperimento segue i seguenti passi:
-1.  Caricamento di una rete di riferimento ("ground truth") dal file `asia.bif`.
-2.  Generazione di dataset di training di dimensioni crescenti tramite campionamento ancestrale.
-3.  Apprendimento di una nuova rete per ogni dataset, stimando le CPT tramite un approccio Bayesiano con **smoothing di Laplace** (pseudo-conteggi unitari).
-4.  Calcolo dell'errore tra la rete vera e quella appresa utilizzando la **Divergenza di Jensen-Shannon (JS)** come metrica di distanza.
-5.  Visualizzazione dei risultati tramite una **curva di apprendimento** che mostra la relazione tra la dimensione del campione e l'errore di stima.
+---
 
-## 2. Struttura del Progetto
+## 🧪 Esperimento
 
-Il progetto è organizzato nei seguenti file:
+L’esperimento si articola in cinque fasi principali:
 
-* `main.py`: Lo script principale che orchestra l'intero esperimento, esegue la simulazione per le diverse dimensioni del campione e genera il grafico finale della curva di apprendimento.
-* `rete_bayesiana.py`: Contiene le classi `Nodo` e `ReteBayesiana`, che definiscono la struttura dati della rete. Include i metodi per caricare una rete da un file `.bif` e per generare campioni.
-* `algoritmi.py`: Contiene le funzioni logiche del progetto:
-    * `impara_parametri()`: Implementa l'algoritmo di apprendimento Bayesiano con smoothing di Laplace.
-    * `js_divergence()`: Implementa la metrica di distanza per confrontare le distribuzioni di probabilità.
-* `asia.bif`: Il file di definizione della rete Bayesiana "Asia", utilizzato come ground truth per l'esperimento.
+1. **Caricamento della rete di riferimento** (ground truth) dal file `asia.bif`.
+2. **Generazione di dataset** di dimensioni crescenti tramite **campionamento ancestrale**.
+3. **Apprendimento dei parametri** utilizzando **smoothing di Laplace** (pseudo-conteggi iniziali).
+4. **Calcolo dell’errore** tra il modello reale e quello appreso, utilizzando la **divergenza di Jensen-Shannon (JS)** come metrica di confronto.
+5. **Visualizzazione grafica** della curva di apprendimento, che mostra l'andamento dell’errore rispetto alla quantità di dati.
 
-## 3. Prerequisiti
+---
 
-Per eseguire il codice, sono necessarie le seguenti librerie Python. È consigliabile installarle tramite `pip`.
+## 📁 Struttura del progetto
 
-* Python 3.x
-* Matplotlib
-* NumPy
+- `main.py`: Esegue l’intero esperimento e produce il grafico finale.
+- `rete_bayesiana.py`: Contiene le classi `Nodo` e `ReteBayesiana`.
+- `algoritmi.py`: Include le funzioni di apprendimento e di confronto tra modelli.
+- `asia.bif`: Rete Bayesiana utilizzata come riferimento.
+- `requirements.txt`: File delle dipendenze Python.
 
-Puoi installare le dipendenze con il seguente comando:
+---
+
+## ▶️ Esecuzione
+
+Assicurati di avere **Python 3.8 o superiore** installato. Poi, installa le dipendenze richieste ed esegui il progetto:
+
 ```bash
-pip install matplotlib numpy
+pip install -r requirements.txt
+python3 main.py

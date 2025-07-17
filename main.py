@@ -10,23 +10,25 @@ def main():
     """
     print("--- Inizio Esperimento Curva di Apprendimento ---")
 
-    # --- 1. SETUP ---
+    # --- SETUP ---
     # Definiamo le dimensioni dei dataset da testare
-    dimensioni_campione = [50, 100, 250, 500, 1000, 2500,5000,10000,10000000]  # massimo 10 000 con andes.bif
+    dimensioni_campione = [50, 100, 250, 500, 1000, 2500, 5000, 10000]  # massimo 10 000 con andes.bif
     risultati_divergenza = [] # Qui salveremo gli errori per ogni dimensione
 
     # Carichiamo la rete originale che rappresenta la "verita'"
     p_vera = ReteBayesiana()
     p_vera.carica_da_file_bif("data/asia.bif")
     print("Rete 'vera' (p) caricata con successo.")
+    
 
-    # --- 2. CICLO DI SIMULAZIONE ---
+    # --- CICLO DI SIMULAZIONE ---
     # Eseguiamo l'esperimento per ogni dimensione del campione
     for n in dimensioni_campione:
         print(f"\nInizio test con n = {n} campioni...")
 
         # a. Genera i dati di addestramento
         dati_training = p_vera.genera_campioni(n)
+
         
         # b. Apprendi una nuova rete 'q' dai dati
         q_appresa = impara_parametri(p_vera, dati_training)
@@ -37,7 +39,7 @@ def main():
         
         print(f"Test completato per n={n}. Errore (JS Divergence Media): {errore:.6f}")
 
-    # --- 3. VISUALIZZAZIONE DEL RISULTATO (VERSIONE MIGLIORATA) ---
+    # ---  VISUALIZZAZIONE DEL RISULTATO  ---
     print("\n--- Generazione del grafico della curva di apprendimento... ---")
     
     # Usiamo uno stile piu' professionale per il grafico
@@ -65,8 +67,7 @@ def main():
     
     # Aggiunge una legenda
     ax.legend()
-    
-    # Rimuove le cornici superflue per un look piu' pulito
+
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     
@@ -74,11 +75,9 @@ def main():
     plt.tight_layout() # Ottimizza lo spazio
     plt.savefig("curva_apprendimento.png", dpi=300) # Salva in alta risoluzione
     print("Grafico 'curva_apprendimento.png' salvato con successo.")
-    
-    # Mostra il grafico a schermo
+
     plt.show()
 
 
-# Questo blocco viene eseguito solo quando lanci "python main.py"
 if __name__ == "__main__":
     main()
